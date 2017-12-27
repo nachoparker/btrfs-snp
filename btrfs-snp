@@ -1,0 +1,106 @@
+#!/bin/bash
+
+#
+# Script that creates BTRFS snapshots, manually or from cron
+#
+# Usage:
+#          sudo btrfs-snp  <dir> (<tag>) (<limit>) (<seconds>) (<destdir>)
+#
+# Copyleft 2017 by Ignacio Nunez Hernanz <nacho _a_t_ ownyourbits _d_o_t_ com>
+# GPL licensed (see end of file) * Use at your own risk!
+#
+# Based on btrfs-snap by Birger Monsen
+#
+# More at https://ownyourbits.com
+#
+
+function btrfs-snp()
+{
+  local   BIN="${0##*/}"
+  local   DIR="${1}"
+  local   TAG="${2:-snapshot}"
+  local LIMIT="${3:-0}"
+  local  TIME="${4:-0}"
+  local   DST="${5:-.snapshots}"
+
+  ## usage
+  [[ "$*" == "" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] && {
+    echo "Usage: $BIN <dir> (<tag>) (<limit>) (<seconds>) (<destdir>)
+
+  dir     │ create snapshot of <dir>
+  tag     │ name the snapshot <tag>_<timestamp>
+  limit   │ keep <limit> snapshots with this tag. 0 to disable
+  seconds │ don't create snapshots before <seconds> have passed from last with this tag. 0 to disable
+  destdir │ store snapshot in <destdir>, relative to <dir>
+
+Cron example: Hourly snapshot for one day, daily for one week, weekly for one month, and monthly for one year.
+
+cat > /etc/cron.hourly/$BIN <<EOF
+#!/bin/bash
+/usr/local/sbin/$BIN /home hourly  24 3600
+/usr/local/sbin/$BIN /home daily    7 86400
+/usr/local/sbin/$BIN /home weekly   4 604800
+/usr/local/sbin/$BIN /     weekly   4 604800
+/usr/local/sbin/$BIN /home monthly 12 2592000
+EOF
+chmod +x /etc/cron.hourly/$BIN"
+    return 0
+  }
+
+  ## checks
+  local SNAPSHOT=${TAG}_$( date +%F_%H%M%S )
+
+  [[ ${EUID} -ne 0  ]] && { echo "Must be run as root. Try 'sudo $BIN'"; return 1; }
+  [[ -d "$SNAPSHOT" ]] && { echo "$SNAPSHOT already exists"            ; return 1; }
+
+  mount -t btrfs | cut -d' ' -f3 | grep -q "^${DIR}$" || {
+    btrfs subvolume show "$DIR" | grep -q "${DIR}$" || {
+      echo "$DIR is not a BTRFS mountpoint or snapshot"
+      return 1
+    }
+  }
+
+  DST="$DIR/$DST"
+  mkdir -p "$DST"
+  local SNAPS=( $( btrfs subvolume list -s --sort=gen "$DST" | awk '{ print $14 }' | grep "${TAG}_" ) )
+
+  ## check time of the last snapshot for this tag
+  [[ "$TIME" != 0 ]] && [[ "${#SNAPS[@]}" != 0 ]] && {
+    local LATEST=$( sed -r "s|.*_(.*_.*)|\\1|;s|_([0-9]{2})([0-9]{2})([0-9]{2})| \\1:\\2:\\3|" <<< "${SNAPS[-1]}" )
+    LATEST=$( date +%s -d "$LATEST" ) || return 1
+
+    [[ $(( LATEST + TIME )) -gt $( date +%s ) ]] && { echo "No new snapshot needed for $TAG"; return 0; }
+  }
+
+  ## do it
+  btrfs subvolume snapshot -r "$DIR" "$DST/$SNAPSHOT" || return 1
+
+  ## prune older backups
+  [[ "$LIMIT" != 0 ]] && \
+  [[ ${#SNAPS[@]} -ge $LIMIT ]] && \
+    echo "Pruning old snapshots..." && \
+    for (( i=0; i <= $(( ${#SNAPS[@]} - LIMIT )); i++ )); do
+      btrfs subvolume delete "$DIR/${SNAPS[$i]}"
+    done
+
+  echo "snapshot $SNAPSHOT generated"
+}
+
+btrfs-snp "$@"
+
+# License
+#
+# This script is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This script is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this script; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+# Boston, MA  02111-1307  USA
