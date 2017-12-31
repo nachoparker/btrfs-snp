@@ -62,7 +62,7 @@ chmod +x /etc/cron.hourly/$BIN"
 
   DST="$DIR/$DST"
   mkdir -p "$DST"
-  local SNAPS=( $( btrfs subvolume list -s --sort=gen "$DST" | awk '{ print $14 }' | grep "${TAG}_" ) )
+  local SNAPS=( $( ls -d "$DST/${TAG}_"* 2>/dev/null ) )
 
   ## check time of the last snapshot for this tag
   [[ "$TIME" != 0 ]] && [[ "${#SNAPS[@]}" != 0 ]] && {
@@ -80,7 +80,7 @@ chmod +x /etc/cron.hourly/$BIN"
   [[ ${#SNAPS[@]} -ge $LIMIT ]] && \
     echo "Pruning old snapshots..." && \
     for (( i=0; i <= $(( ${#SNAPS[@]} - LIMIT )); i++ )); do
-      btrfs subvolume delete "$DIR/${SNAPS[$i]}"
+      btrfs subvolume delete "${SNAPS[$i]}"
     done
 
   echo "snapshot $SNAPSHOT generated"
