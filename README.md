@@ -12,7 +12,7 @@ Usage: btrfs-snp <dir> (<tag>) (<limit>) (<seconds>) (<destdir>)
   tag     │ name the snapshot <tag>_<timestamp>
   limit   │ keep <limit> snapshots with this tag. 0 to disable
   seconds │ don't create snapshots before <seconds> have passed from last with this tag. 0 to disable
-  destdir │ store snapshot in <destdir>, relative to <dir>
+  destdir │ store snapshot in <destdir>, relative to <dir> or absolute. Must be a btrfs mountpoint if absolute, but isn't required to be mounted.
 ```
 
 ## Examples 
