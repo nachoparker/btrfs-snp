@@ -56,52 +56,21 @@ chmod +x /etc/cron.hourly/$BIN"
   # check if dir is a BTRFS mountpoint
   test_valid $DIR || { echo "$DIR is not a BTRFS mountpoint or snapshot"; return 1; }
   
-  UNMOUNT_DST=0
   # if DST evaluates to an absolute path, check if it is mounted. Mount otherwise.
   if [[ "$DST" = /* ]]; then
     test_mounted "$DST" || {
-      mount "$DST"
-      # makes sure that DST is unmounted later
-      UNMOUNT_DST=1
+      mount "$DST" && {
+        perform_snapshot "$DIR" "$TAG" "$LIMIT" "$TIME" "$DST" "$SNAPSHOT"
+        RESULT=$?
+        umount "$DST"
+        return $RESULT
+      }
     }
   else
     DST="$DIR/$DST"
     mkdir -p "$DST"
   fi
-  
-  local SNAPS=( $( ls -d "$DST/${TAG}_"* 2>/dev/null ) )
-
-  ## check time of the last snapshot for this tag
-  [[ "$TIME" != 0 ]] && [[ "${#SNAPS[@]}" != 0 ]] && {
-    local LATEST=$( sed -r "s|.*_(.*_.*)|\\1|;s|_([0-9]{2})([0-9]{2})([0-9]{2})| \\1:\\2:\\3|" <<< "${SNAPS[-1]}" )
-    LATEST=$( date +%s -d "$LATEST" ) || return 1
-
-    [[ $(( LATEST + TIME )) -gt $( date +%s ) ]] && { 
-      echo "No new snapshot needed for $TAG"; 
-      [[ $UNMOUNT_DST -ne 0 ]] && {
-        umount "$DST"
-        echo "unmounted $DST"
-      }
-      return 0; 
-    }
-  }
-
-  ## do it
-  btrfs subvolume snapshot -r "$DIR" "$DST/$SNAPSHOT" || return 1
-
-  ## prune older backups
-  [[ "$LIMIT" != 0 ]] && \
-  [[ ${#SNAPS[@]} -ge $LIMIT ]] && \
-    echo "Pruning old snapshots..." && \
-    for (( i=0; i <= $(( ${#SNAPS[@]} - LIMIT )); i++ )); do
-      btrfs subvolume delete "${SNAPS[$i]}"
-    done
-
-  echo "snapshot $SNAPSHOT generated"
-  [[ $UNMOUNT_DST -ne 0 ]] && {
-    umount "$DST"
-    echo "unmounted $DST"
-  }
+  perform_snapshot "$DIR" "$TAG" "$LIMIT" "$TIME" "$DST" "$SNAPSHOT"
 }
 
 function test_valid()
@@ -120,6 +89,42 @@ function test_mounted()
   local dir="${1}"
   mount -t btrfs | cut -d' ' -f3 | grep -q "^${dir}$" || return 1;
   return 0;
+}
+
+function perform_snapshot()
+{
+  local   DIR="${1}"
+  local   TAG="${2}"
+  local LIMIT="${3}"
+  local  TIME="${4}"
+  local   DST="${5}"
+  local SNAPSHOT="${6}"
+  local SNAPS=( $( ls -d "$DST/${TAG}_"* 2>/dev/null ) )
+
+  ## check time of the last snapshot for this tag
+  [[ "$TIME" != 0 ]] && [[ "${#SNAPS[@]}" != 0 ]] && {
+    local LATEST=$( sed -r "s|.*_(.*_.*)|\\1|;s|_([0-9]{2})([0-9]{2})([0-9]{2})| \\1:\\2:\\3|" <<< "${SNAPS[-1]}" )
+    LATEST=$( date +%s -d "$LATEST" ) || return 1
+
+    [[ $(( LATEST + TIME )) -gt $( date +%s ) ]] && { 
+      echo "No new snapshot needed for $TAG"; 
+      return 0; 
+    }
+  }
+
+  ## do it
+  btrfs subvolume snapshot -r "$DIR" "$DST/$SNAPSHOT" || return 1
+
+  ## prune older backups
+  [[ "$LIMIT" != 0 ]] && \
+  [[ ${#SNAPS[@]} -ge $LIMIT ]] && \
+    echo "Pruning old snapshots..." && \
+    for (( i=0; i <= $(( ${#SNAPS[@]} - LIMIT )); i++ )); do
+      btrfs subvolume delete "${SNAPS[$i]}"
+    done
+
+  echo "snapshot $SNAPSHOT generated"
+  return 0
 }
 
 btrfs-snp "$@"
