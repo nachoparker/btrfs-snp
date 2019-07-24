@@ -54,7 +54,7 @@ chmod +x /etc/cron.hourly/$BIN"
   [[ -d "$SNAPSHOT" ]] && { echo "$SNAPSHOT already exists"            ; return 1; }
 
   mount -t btrfs | cut -d' ' -f3 | grep -q "^${DIR}$" || {
-    btrfs subvolume show "$DIR" | grep -q "${DIR}$" || {
+    btrfs subvolume show "$DIR" &>/dev/null || {
       echo "$DIR is not a BTRFS mountpoint or snapshot"
       return 1
     }
