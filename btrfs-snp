@@ -22,6 +22,7 @@ function btrfs-snp()
   local LIMIT="${3:-0}"
   local  TIME="${4:-0}"
   local   DST="${5:-.snapshots}"
+  local MARGIN="${6:-0}"
 
   ## usage
   [[ "$*" == "" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] && {
@@ -32,6 +33,7 @@ function btrfs-snp()
   limit   │ keep <limit> snapshots with this tag. 0 to disable
   seconds │ don't create snapshots before <seconds> have passed from last with this tag. 0 to disable
   destdir │ store snapshot in <destdir>, path absolute or relative to <dir>
+  margin  │ number of seconds to add when comparing <seconds> to previous snapshot time. 0 to disable
 
 Cron example: Hourly snapshot for one day, daily for one week, weekly for one month, and monthly for one year.
 
@@ -69,7 +71,7 @@ chmod +x /etc/cron.hourly/$BIN"
     local LATEST=$( sed -r "s|.*_(.*_.*)|\\1|;s|_([0-9]{2})([0-9]{2})([0-9]{2})| \\1:\\2:\\3|" <<< "${SNAPS[-1]}" )
     LATEST=$( date +%s -d "$LATEST" ) || return 1
 
-    [[ $(( LATEST + TIME )) -gt $( date +%s ) ]] && { echo "No new snapshot needed for $TAG"; return 0; }
+    [[ $(( LATEST + TIME )) -gt $(( $( date +%s ) + MARGIN )) ]] && { echo "No new snapshot needed for $TAG"; return 0; }
   }
 
   ## do it
