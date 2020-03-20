@@ -33,7 +33,6 @@ function btrfs-snp()
   limit   │ keep <limit> snapshots with this tag. 0 to disable
   seconds │ don't create snapshots before <seconds> have passed from last with this tag. 0 to disable
   destdir │ store snapshot in <destdir>, path absolute or relative to <dir>
-  margin  │ number of seconds to add when comparing <seconds> to previous snapshot time. 0 to disable
 
 Cron example: Hourly snapshot for one day, daily for one week, weekly for one month, and monthly for one year.
 
