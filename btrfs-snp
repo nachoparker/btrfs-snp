@@ -22,7 +22,7 @@ function btrfs-snp()
   local LIMIT="${3:-0}"
   local  TIME="${4:-0}"
   local   DST="${5:-.snapshots}"
-  local MARGIN="${6:-0}"
+  local MARGIN=15 # allow for some seconds of inaccuracy for cron / systemd timers
 
   ## usage
   [[ "$*" == "" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] && {
